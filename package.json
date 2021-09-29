@@ -1,0 +1,9 @@
+{
+    "name": "windows-hooks",
+    "author": "Stas Darevskiy",
+    "license": "MIT",
+    "type": "module",
+    "dependencies": {
+        "ffi-napi": "^4.0.3"
+    }
+}
