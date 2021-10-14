@@ -4,6 +4,7 @@
     "license": "MIT",
     "type": "module",
     "dependencies": {
+        "delay": "^5.0.0",
         "ffi-napi": "^4.0.3"
     }
 }
