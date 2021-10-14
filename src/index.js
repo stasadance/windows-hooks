@@ -1,4 +1,5 @@
 import { Library, Callback, CIF } from "ffi-napi";
+import delay from "delay";
 
 const user32 = new Library("user32", {
     GetDC: ["int", ["int"]],
@@ -11,6 +12,10 @@ const user32 = new Library("user32", {
     GetSystemMetrics: ["int", ["int"]],
     GetCursorPos: ["bool", ["pointer"]],
     SetCursorPos: ["bool", ["int", "int"]],
+    mouse_event: ["void", ["int", "int", "int", "int", "int"]],
+    SendInput: ["int", ["int", "pointer", "int"]],
+    GetKeyState: ["short", ["int"]],
+    BlockInput: ["bool", ["bool"]],
 });
 
 const gdi32 = new Library("gdi32", {
@@ -47,7 +52,9 @@ function getWindowList() {
 }
 
 function searchForWindowHandle(name) {
-    const filteredList = getWindowList().filter((x) => x.title.includes(name));
+    const filteredList = getWindowList().filter((x) =>
+        x.title.toLowerCase().includes(name.toLowerCase())
+    );
     if (filteredList.length) {
         return filteredList[0].handle;
     } else {
@@ -127,6 +134,153 @@ function getCursorPosition() {
     return cursor;
 }
 
+function setCursorPosition(x, y) {
+    user32.SetCursorPos(x, y);
+}
+
+async function dragCursor(x1, y1, x2, y2) {
+    user32.SetCursorPos(x1, y1);
+    user32.mouse_event(0x0002, 0, 0, 0, 0);
+    user32.SetCursorPos(x2, y2);
+    await delay(10);
+    user32.mouse_event(0x0004, 0, 0, 0, 0);
+}
+
+function leftClick(double) {
+    user32.mouse_event(0x0002, 0, 0, 0, 0);
+    user32.mouse_event(0x0004, 0, 0, 0, 0);
+
+    if (double) {
+        user32.mouse_event(0x0002, 0, 0, 0, 0);
+        user32.mouse_event(0x0004, 0, 0, 0, 0);
+    }
+}
+
+function rightClick() {
+    user32.mouse_event(0x0008, 0, 0, 0, 0);
+    user32.mouse_event(0x0010, 0, 0, 0, 0);
+}
+
+async function typeString(str, delayMs) {
+    const strToType = str.toString();
+    const caps = isCapsEnabled();
+    for (let index in strToType) {
+        if (
+            (caps && strToType[index].toLowerCase() == strToType[index]) ||
+            (!caps && strToType[index].toUpperCase() == strToType[index])
+        ) {
+            pressKeys(["shift", strToType[index]]);
+        } else {
+            pressKey(strToType[index]);
+            pressKey(strToType[index], true);
+        }
+
+        if (delayMs) {
+            await delay(delayMs);
+        }
+    }
+}
+
+async function pressKeys(keys, delayMs) {
+    for (let i = 0; i < keys.length; i++) {
+        pressKey(keys[i]);
+        if (delayMs) {
+            await delay(delayMs);
+        }
+    }
+    for (let i = keys.length - 1; i >= 0; i--) {
+        pressKey(keys[i], true);
+        if (delayMs) {
+            await delay(delayMs);
+        }
+    }
+}
+
+function pressKey(key, release) {
+    const keyChar = key.toString().toLowerCase();
+    const scanKeys =
+        "**1234567890-=**qwertyuiop[]**asdfghjkl;'`*\\zxcvbnm,./".split("");
+
+    let scanCode = 0;
+    switch (keyChar) {
+        case "enter":
+            scanCode = 28;
+            break;
+        case "ctrl":
+            scanCode = 29;
+            break;
+        case "shift":
+            scanCode = 54;
+            break;
+        case "tab":
+            scanCode = 15;
+            break;
+        case " ":
+        case "space":
+            scanCode = 57;
+            break;
+        case "back":
+        case "backspace":
+            scanCode = 14;
+            break;
+        case "delete":
+            scanCode = 83;
+            break;
+        case "escape":
+            scanCode = 1;
+            break;
+        case "caps":
+        case "capslock":
+            scanCode = 58;
+            break;
+        case "up":
+            scanCode = 72;
+            break;
+        case "down":
+            scanCode = 80;
+            break;
+        case "left":
+            scanCode = 75;
+            break;
+        case "right":
+            scanCode = 77;
+            break;
+        default:
+            scanCode = scanKeys.indexOf(keyChar);
+    }
+
+    const inputBuffer = CIF("pointer", [
+        "int",
+        "int",
+        "short",
+        "short",
+        "int",
+        "int",
+        "int64",
+    ]);
+
+    inputBuffer.writeInt32LE(1, 0);
+    inputBuffer.writeInt32LE(0, 4);
+    inputBuffer.writeInt16LE(0, 8);
+    inputBuffer.writeInt16LE(scanCode, 10);
+    inputBuffer.writeInt32LE(release ? 0x0008 | 0x0002 : 0x0008, 12);
+    inputBuffer.writeInt32LE(0, 16);
+    inputBuffer.writeInt64LE(0, 20);
+
+    user32.SendInput(1, inputBuffer, 40);
+}
+
+function isCapsEnabled() {
+    return user32.GetKeyState(0x14) == 1;
+}
+
+/**
+ * Requires administrator
+ */
+function setInputEnabled(enabled) {
+    user32.BlockInput(!enabled);
+}
+
 function componentToHex(c) {
     var hex = c.toString(16);
     return hex.length == 1 ? "0" + hex : hex;
@@ -154,8 +308,17 @@ export {
     getWindowList,
     getWindowPosition,
     getScreenDimensions,
-    getCursorPosition,
     getPixelColor,
+    getCursorPosition,
+    setCursorPosition,
+    isCapsEnabled,
+    setInputEnabled,
+    leftClick,
+    rightClick,
+    dragCursor,
+    pressKey,
+    pressKeys,
+    typeString,
     restoreWindow,
     maximizeWindow,
     minimizeWindow,
