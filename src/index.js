@@ -15,6 +15,7 @@ const user32 = new Library("user32", {
     mouse_event: ["void", ["int", "int", "int", "int", "int"]],
     SendInput: ["int", ["int", "pointer", "int"]],
     GetKeyState: ["short", ["int"]],
+    BlockInput: ["bool", ["bool"]],
 });
 
 const gdi32 = new Library("gdi32", {
@@ -273,6 +274,13 @@ function isCapsEnabled() {
     return user32.GetKeyState(0x14) == 1;
 }
 
+/**
+ * Requires administrator
+ */
+function setInputEnabled(enabled) {
+    user32.BlockInput(!enabled);
+}
+
 function componentToHex(c) {
     var hex = c.toString(16);
     return hex.length == 1 ? "0" + hex : hex;
@@ -304,6 +312,7 @@ export {
     getCursorPosition,
     setCursorPosition,
     isCapsEnabled,
+    setInputEnabled,
     leftClick,
     rightClick,
     dragCursor,
